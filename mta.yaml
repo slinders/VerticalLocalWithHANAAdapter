@@ -1,0 +1,72 @@
+ID: xsahaa
+_schema-version: '2.0'
+version: 0.0.3
+
+modules:
+ - name: salesdb
+   type: hdb
+   path: salesdb
+   requires:
+    - name: sales-hdi
+ 
+ - name: xsahaa-be
+   type: java
+   path: java
+   parameters:
+     memory: 512M
+     buildpack: sap_java_buildpack
+   properties:
+     TARGET_RUNTIME: tomee
+     SAP_JWT_TRUST_ACL: '[{"clientid":"sb-xsahaa-be", "identityzone": "*"}]'
+     USE_NAMED_USER: true
+     JBP_CONFIG_RESOURCE_CONFIGURATION: "['tomee/webapps/ROOT/WEB-INF/resources.xml': {'xsahaa-hdi-container':'sales-hdi'}]"
+   provides:
+    - name: xsahaa-be
+      properties:
+        url: ${default-url}
+   requires:
+    - name: xsahaa-uaa
+    - name: sales-hdi
+ 
+ - name: xsahaa-rt
+   type: nodejs
+   path: approuter
+   parameters:
+     memory: 128M
+     buildpack: nodejs_buildpack
+   requires:
+    - name: xsahaa-uaa
+    - name: xsahaa-be
+      group: destinations
+      properties:
+        name: xsahaa-be
+        url: ~{url}
+        forwardAuthToken: true
+   properties:
+      CORS: >
+        [
+            {
+                "uriPattern": "^/sap/bc/ina/(.*)$",
+                "allowedOrigin": [
+                                     {"host":"demo-presalesuki.eu10.sapanalytics.cloud", "protocol":"https"}
+                                 ],
+                "allowedMethods": ["GET", "POST", "HEAD", "OPTIONS", "PUT", "DELETE"],
+                "allowedHeaders": ["Origin", "Accept", "X-Requested-With", "Content-Type", "Access-Control-Request-Method", "Access-Control-Request-Headers", "Authorization", "X-Sap-Cid", "X-Csrf-Token"],
+                "exposeHeaders": ["Accept", "Authorization", "X-Requested-With", "X-Sap-Cid", "Access-Control-Allow-Origin", "Access-Control-Allow-Credentials", "X-Csrf-Token", "Content-Type"]
+            }
+        ]
+      TENANT_HOST_PATTERN: 'gcoe-(.*)-dev-xsahaa-rt.cfapps.(.*).hana.ondemand.com'
+ 
+resources:
+ - name: sales-hdi
+   parameters:
+      config:
+         schema: SALES
+         database_id: dc3975da-4f63-44dc-8d75-6109c730f20f
+   properties:
+      hdi-container-name: ${service-name}
+   type: com.sap.xs.hdi-container
+ - name: xsahaa-uaa
+   type: com.sap.xs.uaa
+   parameters:
+      path: ./xs-security.json
